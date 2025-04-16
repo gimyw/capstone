@@ -458,8 +458,58 @@ class _CalendarPageState extends State<CalendarPage> {
 class PillPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text('복약 페이지입니다.'),
+    return Scaffold(
+      backgroundColor: Color(0xFFF8F8F8),
+      body: Column(
+        children: [
+          SizedBox(height: 20),
+          Text(
+            '복약 목록',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 20),
+
+          // 여기부터 변경
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: MediaQuery.of(context).size.width,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('약 이름')),
+                      DataColumn(label: Text('복용 시간')),
+                      DataColumn(label: Text('복용 여부')),
+                    ],
+                    rows: const [
+                      DataRow(cells: [
+                        DataCell(Text('타이레놀')),
+                        DataCell(Text('08:00')),
+                        DataCell(Icon(Icons.check, color: Colors.green)),
+                      ]),
+                      DataRow(cells: [
+                        DataCell(Text('오메가3')),
+                        DataCell(Text('13:00')),
+                        DataCell(Icon(Icons.close, color: Colors.red)),
+                      ]),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // 여기까지 변경
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // TODO: 약 추가 페이지로 이동 또는 다이얼로그 띄우기
+        },
+        child: Icon(Icons.add),
+        backgroundColor: Colors.teal,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }
