@@ -33,7 +33,8 @@ class DatabaseHelper {
       CREATE TABLE members (
          email       TEXT PRIMARY KEY,
          member_name TEXT NOT NULL,
-        password    TEXT NOT NULL
+         password    TEXT NOT NULL,
+         guardian_email TEXT
       );
     ''');
 
