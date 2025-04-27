@@ -2,19 +2,119 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'database_helper.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'dart:io'; // Platform 클래스를 사용하기 위해 필요
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart'; // 권한 요청
+// Flutter Local Notifications 플러그인 인스턴스 생성
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+FlutterLocalNotificationsPlugin();
+
+/// 백그라운드에서 알람 콜백을 처리할 함수 (최상위 레벨 또는 static 함수여야 함)
+@pragma('vm:entry-point') // Release 모드에서 코드 축소를 방지
+void alarmCallback(int id, Map<String, dynamic> params) async {
+  print("알람 콜백 수신! ID: $id, Params: $params");
+
+  // 백그라운드 isolate에서도 Flutter 및 플러그인 초기화 필요
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // DatabaseHelper 초기화 (백그라운드에서 DB 접근 위해)
+  final dbHelper = DatabaseHelper();
+  await dbHelper.database; // DB 열기 보장
+
+  // 알림 플러그인 초기화 (콜백 내부에서도 필요할 수 있음)
+  await _initializeNotifications(); // 아래 정의된 초기화 함수 재사용
+
+  // params에서 약 정보 추출 (scheduleAlarm 시 전달한 정보)
+  final String medName = params['medName'] ?? '약';
+  final String mealTime = params['mealTime'] ?? '복용 시간';
+  final String alarmTime = params['alarmTime'] ?? '';
+
+  // 알림 표시
+  await showNotification(id, medName, mealTime, alarmTime);
+}
+
+/// 알림 표시 함수
+Future<void> showNotification(int id, String medName, String mealTime, String alarmTime) async {
+  // Android 알림 채널 설정
+  const AndroidNotificationDetails androidPlatformChannelSpecifics =
+  AndroidNotificationDetails(
+    'high_importance_channel', // 채널 ID (AndroidManifest와 일치시키거나 자유롭게)
+    'High Importance Notifications', // 채널 이름
+    channelDescription: 'This channel is used for important notifications.', // 채널 설명
+    importance: Importance.max,
+    priority: Priority.high,
+    playSound: true,
+    // 커스텀 사운드 설정 (android/app/src/main/res/raw/alarm_sound.mp3)
+    sound: RawResourceAndroidNotificationSound('alarm_sound'), // 'alarm_sound'는 확장자 제외 파일명
+    // fullScreenIntent: true, // 전체 화면 인텐트 (잠금 화면 위 & 화면 켜짐) - 신중하게 사용
+    ticker: 'ticker',
+  );
+
+  const NotificationDetails platformChannelSpecifics = NotificationDetails(
+    android: androidPlatformChannelSpecifics,
+  );
+
+  // 알림 내용 구성
+  String title = '💊 복약 시간 알림';
+  String body = '$alarmTime - $mealTime 에 $medName 복용할 시간입니다.';
+
+  print("알림 표시 시도: ID=$id, Title=$title, Body=$body");
+
+  try {
+    await flutterLocalNotificationsPlugin.show(
+      id, // 알람 ID를 알림 ID로 사용
+      title,
+      body,
+      platformChannelSpecifics,
+      payload: 'alarm_id_$id', // 알림 클릭 시 전달할 데이터 (선택 사항)
+    );
+    print("알림 표시 성공: ID=$id");
+  } catch (e) {
+    print("알림 표시 실패: $e");
+  }
+}
+
+
+// 알림 초기화 함수
+Future<void> _initializeNotifications() async {
+  // Android 초기화 설정
+  const AndroidInitializationSettings initializationSettingsAndroid =
+  AndroidInitializationSettings('@mipmap/ic_launcher'); // 앱 아이콘 사용
+
+
+  // 통합 초기화 설정
+  const InitializationSettings initializationSettings = InitializationSettings(
+    android: initializationSettingsAndroid,
+  );
+
+  // 플러그인 초기화
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+    // 알림 클릭 시 호출될 콜백 (앱이 실행 중일 때)
+    onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
+      final String? payload = notificationResponse.payload;
+      if (payload != null) {
+        print('알림 클릭됨! payload: $payload');
+        // TODO: 페이로드를 사용하여 특정 페이지로 이동하거나 작업 수행
+      }
+    },
+    // 백그라운드/종료 상태에서 알림 클릭 시 호출될 콜백
+    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+  );
+}
+
+// 백그라운드/종료 상태에서 알림 탭 처리 함수 (최상위 레벨 또는 static)
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) {
+  // handle action
+  print('백그라운드 알림 탭! Payload: ${notificationResponse.payload}');
+  // 여기서 앱을 열거나 특정 로직 수행 가능 (main 함수 재실행과 유사)
+}
 
 Future<void> main() async {
   // async 추가
   // Flutter 바인딩 초기화 보장
   WidgetsFlutterBinding.ensureInitialized();
-
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    sqfliteFfiInit(); // FFI 초기화 호출
-    databaseFactory = databaseFactoryFfi; // FFI 데이터베이스 팩토리를 기본으로 설정
-    print("Sqflite FFI initialized for Desktop.");
-  }
 
   // 데이터베이스 초기화 (파일 열기 및 테이블 생성 시도)
   // 앱 시작 시 딱 한 번 호출되어 DB 준비
@@ -26,8 +126,138 @@ Future<void> main() async {
     // 앱 실행을 계속할지, 아니면 오류 메시지를 보여줄지 결정
   }
 
+  // --- 알림 초기화 ---
+  await _initializeNotifications();
+
+  // --- Android Alarm Manager 초기화 ---
+    try {
+      await AndroidAlarmManager.initialize();
+      print("Android Alarm Manager initialized.");
+    } catch (e) {
+      print("Error initializing Android Alarm Manager: $e");
+    }
+
+  // --- 권한 요청 ---
+  await _requestPermissions(); // 앱 시작 시 권한 요청
+
   runApp(MyApp());
 }
+
+// 권한 요청 함수
+Future<void> _requestPermissions() async {
+    PermissionStatus notificationStatus = await Permission.notification.request(); // 요청하고 상태 받기
+    print("알림 권한 상태: $notificationStatus");
+
+    // 정확한 알람 권한 확인
+    PermissionStatus exactAlarmStatus = await Permission.scheduleExactAlarm.status;
+    print("정확한 알람 권한 상태 (초기): $exactAlarmStatus");
+    if (exactAlarmStatus.isDenied) { // isDenied 또는 isPermanentlyDenied 등
+      print("정확한 알람 권한이 필요합니다. 앱 설정에서 '알람 및 리마인더'를 허용해주세요.");
+      // 여기서 바로 설정 열기를 유도할 수도 있음
+      // await openAppSettings();
+    }
+  // Windows 권한은 일반적으로 필요 없음
+}
+
+// (임시) 초기 데이터 기반 알람 스케줄링 함수
+Future<void> scheduleInitialAlarms() async {
+  final dbHelper = DatabaseHelper();
+  // 예시: t@example.com 사용자의 모든 알람 가져오기
+  try {
+    List<Map<String, dynamic>> alarms = await dbHelper.getAllAlarmsForUser('t@example.com');
+    print("DB에서 가져온 알람 수: ${alarms.length}");
+
+    for (var alarm in alarms) {
+      int alarmId = alarm['alarm_id'];
+      String medName = alarm['MED_NAME'];
+      String mealTime = alarm['MEAL_TIME']; // 'MORNING', 'LUNCH', 'DINNER' 등
+      String alarmTimeString = alarm['ALARM_TIME']; // "HH:mm" 형식 (예: "09:00")
+      // String startDateString = alarm['START_DATE'];
+      // String? endDateString = alarm['END_DATE'];
+      // TODO: 시작/종료 날짜 고려 로직 추가
+
+      print("스케줄링 시도: ID=$alarmId, 약=$medName, 시간=$alarmTimeString");
+      await scheduleAlarm(alarmId, alarmTimeString, medName, mealTime);
+    }
+  } catch (e) {
+    print("초기 알람 스케줄링 중 오류: $e");
+  }
+}
+
+// 기존 scheduleInitialAlarms 함수를 특정 사용자에 대해 실행하도록 수정
+Future<void> scheduleInitialAlarmsForUser(String userEmail) async {
+  final dbHelper = DatabaseHelper();
+  try {
+    List<Map<String, dynamic>> alarms = await dbHelper.getAllAlarmsForUser(userEmail);
+    print("'$userEmail' 사용자의 알람 스케줄링 시작 (${alarms.length}개)");
+
+    for (var alarm in alarms) {
+      int alarmId = alarm['alarm_id'];
+      String medName = alarm['MED_NAME'];
+      String mealTime = alarm['MEAL_TIME'];
+      String alarmTimeString = alarm['ALARM_TIME'];
+      // TODO: 시작/종료 날짜 고려 로직 추가
+
+      print("스케줄링 시도 (HomeScreen): ID=$alarmId, 약=$medName, 시간=$alarmTimeString");
+      await scheduleAlarm(alarmId, alarmTimeString, medName, mealTime); // 기존 스케줄링 함수 호출
+    }
+  } catch (e) {
+    print("초기 알람 스케줄링 중 오류 (HomeScreen): $e");
+  }
+}
+
+/// 알람 스케줄링 함수
+Future<void> scheduleAlarm(int alarmId, String alarmTimeString, String medName, String mealTime) async {
+  // --- 시간 계산 ---
+  // DateTime 사용으로 되돌릴 수 있음 (TZDateTime 불필요)
+  final now = DateTime.now();
+  final parts = alarmTimeString.split(':');
+  if (parts.length != 2) {
+    print("잘못된 알람 시간 형식: $alarmTimeString");
+    return;
+  }
+  final hour = int.parse(parts[0]);
+  final minute = int.parse(parts[1]);
+  DateTime scheduledDateTime = DateTime(now.year, now.month, now.day, hour, minute);
+  if (scheduledDateTime.isBefore(now)) {
+    scheduledDateTime = scheduledDateTime.add(const Duration(days: 1));
+  }
+  print("계산된 알람 시간 ($alarmId): $scheduledDateTime");
+
+  // *** 스케줄링 직전에 권한 재확인 ***
+  bool exactAlarmGranted = await Permission.scheduleExactAlarm.isGranted;
+  if (!exactAlarmGranted) {
+    print("scheduleAlarm: 권한 없음! ID=$alarmId 스케줄링 중단.");
+    // 여기서 사용자에게 알림을 다시 보내거나 로깅할 수 있습니다.
+    return; // 권한 없으면 스케줄링 시도 안 함
+  }
+  print("scheduleAlarm: 권한 확인됨. ID=$alarmId 스케줄링 진행.");
+
+  try {
+    final result = await AndroidAlarmManager.oneShotAt(
+        scheduledDateTime, // DateTime 사용
+        alarmId,
+        alarmCallback,
+        exact: true,
+        wakeup: true,
+        rescheduleOnReboot: true,
+        params: {
+          'medName': medName,
+          'mealTime': mealTime,
+          'alarmTime': alarmTimeString,
+        }
+    );
+
+    if (result) {
+      print("Android 알람 예약 성공: ID=$alarmId at $scheduledDateTime");
+    } else {
+      print("Android 알람 예약 실패: ID=$alarmId.");
+    }
+  } catch (e) {
+    print("Android 알람 스케줄링 중 오류 발생 (ID: $alarmId): $e");
+  }
+}
+
 
 class MyApp extends StatelessWidget {
   @override
@@ -172,8 +402,8 @@ class EmailLoginPage extends StatelessWidget {
                         MaterialPageRoute(
                           builder:
                               (_) => HomeScreen(
-                            userEmail: member['email'] as String,
-                          ),
+                                userEmail: member['email'] as String,
+                              ),
                         ),
                       );
                     } else {
@@ -331,7 +561,34 @@ class _HomeScreenState extends State<HomeScreen> {
       PillPage(userEmail: widget.userEmail), // userEmail 전달
       MyPage(userEmail: widget.userEmail), // userEmail 전달
     ];
+    _scheduleAlarmsAfterPermissionCheck(); // 임시로 알람 호출
   }
+
+  Future<void> _scheduleAlarmsAfterPermissionCheck() async {
+    bool exactAlarmGranted = await Permission.scheduleExactAlarm.isGranted;
+    bool notificationGranted = await Permission.notification.isGranted;
+
+    print("HomeScreen initState: 정확한 알람 권한 상태: $exactAlarmGranted");
+    print("HomeScreen initState: 알림 권한 상태: $notificationGranted");
+
+    if (exactAlarmGranted) {
+      await scheduleInitialAlarmsForUser(widget.userEmail);
+    } else {
+      print("HomeScreen initState: 정확한 알람 권한이 없어 스케줄링을 건너<0xEB><0x9B><0x81>니다.");
+      if (mounted) { // initState에서 context 사용 시 mounted 확인 권장
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('정확한 복약 알람을 위해 앱 설정에서 "알람 및 리마인더" 권한을 허용해주세요.'),
+            action: SnackBarAction(
+              label: '설정 열기',
+              onPressed: openAppSettings,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
 
   void _onItemTapped(int index) {
     setState(() {
@@ -489,18 +746,18 @@ class MainPage extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children:
-                  days.map((day) {
-                    return Column(
-                      children: [
-                        Text(day, style: TextStyle(fontSize: 16)),
-                        SizedBox(height: 8),
-                        Icon(
-                          Icons.check_circle_outline,
-                          color: Colors.grey,
-                        ),
-                      ],
-                    );
-                  }).toList(),
+                      days.map((day) {
+                        return Column(
+                          children: [
+                            Text(day, style: TextStyle(fontSize: 16)),
+                            SizedBox(height: 8),
+                            Icon(
+                              Icons.check_circle_outline,
+                              color: Colors.grey,
+                            ),
+                          ],
+                        );
+                      }).toList(),
                 ),
               ],
             ),
@@ -657,6 +914,20 @@ class _PillPageState extends State<PillPage> {
     });
   }
 
+  // 알람 취소 함수 (예시)
+  Future<void> cancelAlarm(int alarmId) async {
+      try {
+        final result = await AndroidAlarmManager.cancel(alarmId);
+        if (result) {
+          print("알람 취소 성공: ID=$alarmId");
+        } else {
+          print("알람 취소 실패: ID=$alarmId (이미 취소되었거나 존재하지 않음)");
+        }
+      } catch (e) {
+        print("알람 취소 중 오류: $e");
+      }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -711,23 +982,23 @@ class _PillPageState extends State<PillPage> {
                         ],
                         // alarms 리스트를 DataRow 리스트로 변환
                         rows:
-                        alarms
-                            .map(
-                              (alarm) => DataRow(
-                            cells: [
-                              DataCell(
-                                Text(alarm['MED_NAME'] ?? 'N/A'),
-                              ), // null 체크
-                              DataCell(
-                                Text(alarm['MEAL_TIME'] ?? 'N/A'),
-                              ),
-                              DataCell(
-                                Text(alarm['ALARM_TIME'] ?? 'N/A'),
-                              ),
-                            ],
-                          ),
-                        )
-                            .toList(),
+                            alarms
+                                .map(
+                                  (alarm) => DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Text(alarm['MED_NAME'] ?? 'N/A'),
+                                      ), // null 체크
+                                      DataCell(
+                                        Text(alarm['MEAL_TIME'] ?? 'N/A'),
+                                      ),
+                                      DataCell(
+                                        Text(alarm['ALARM_TIME'] ?? 'N/A'),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                                .toList(),
                       ),
                     ),
                   );
@@ -866,7 +1137,7 @@ class _MyPageState extends State<MyPage> {
                           MaterialPageRoute(
                             builder: (context) => LoginScreen(),
                           ),
-                              (Route<dynamic> route) => false, // 모든 이전 라우트 제거
+                          (Route<dynamic> route) => false, // 모든 이전 라우트 제거
                         );
                       },
                       child: Text(

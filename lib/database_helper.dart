@@ -46,13 +46,14 @@ class DatabaseHelper {
 
     await db.execute('''
       CREATE TABLE MEDICATION_ALARMS (
+          alarm_id     INTEGER PRIMARY KEY AUTOINCREMENT,
           EMAIL        TEXT NOT NULL,
           MED_NAME     TEXT NOT NULL,
           MEAL_TIME    TEXT NOT NULL,
           ALARM_TIME   TEXT NOT NULL,
           START_DATE   TEXT NOT NULL,
           END_DATE     TEXT,
-          PRIMARY KEY (EMAIL, MED_NAME, MEAL_TIME),
+          UNIQUE (EMAIL, MED_NAME, MEAL_TIME),
           FOREIGN KEY (EMAIL) REFERENCES members(EMAIL) ON DELETE CASCADE, -- 회원 탈퇴 시 알람도 삭제되도록 CASCADE 추가 (선택적)
           FOREIGN KEY (MED_NAME) REFERENCES medications(MED_NAME) ON DELETE CASCADE, -- 약 정보 삭제 시 알람도 삭제 (선택적)
           CHECK (MEAL_TIME IN ('MORNING', 'LUNCH', 'DINNER')),
@@ -60,33 +61,23 @@ class DatabaseHelper {
       );
     ''');
 
-    // --- 초기 테스트 데이터 삽입 (선택적) ---
-    // await _insertInitialData(db);
+    await _insertInitialData(db);
   }
 
   // (선택적) 초기 데이터 삽입 예시
-  // Future<void> _insertInitialData(Database db) async {
-  //   // 비밀번호가 없으므로 바로 members 삽입
-  //   await db.insert('members', {'email': 'test@example.com', 'member_name': '홍길동'});
-  //   await db.insert('medications', {'med_name': '종합비타민', 'description': '아침 식후 복용'});
-  //   await db.insert('medications', {'med_name': '위장약', 'description': '저녁 식전 복용'});
-  //   await db.insert('MEDICATION_ALARMS', {
-  //     'EMAIL': 'test@example.com',
-  //     'MED_NAME': '종합비타민',
-  //     'MEAL_TIME': 'MORNING',
-  //     'ALARM_TIME': '09:00',
-  //     'START_DATE': '2023-01-01', // 실제 날짜 형식으로 저장
-  //     'END_DATE': null
-  //   });
-  //    await db.insert('MEDICATION_ALARMS', {
-  //     'EMAIL': 'test@example.com',
-  //     'MED_NAME': '위장약',
-  //     'MEAL_TIME': 'DINNER',
-  //     'ALARM_TIME': '19:00',
-  //     'START_DATE': '2023-01-01',
-  //     'END_DATE': null
-  //   });
-  // }
+  Future<void> _insertInitialData(Database db) async {
+     // 비밀번호가 없으므로 바로 members 삽입
+     await db.insert('members', {'email': 't@example.com', 'member_name': '홍길동', 'password': '12345'});
+     await db.insert('medications', {'med_name': '종합비타민', 'description': '아침 식후 복용'});
+     await db.insert('MEDICATION_ALARMS', {
+       'EMAIL': 't@example.com',
+       'MED_NAME': '종합비타민',
+       'MEAL_TIME': 'MORNING',
+       'ALARM_TIME': '13:37',
+       'START_DATE': '2025-04-27', // 실제 날짜 형식으로 저장
+       'END_DATE': null
+     });
+  }
 
   // --- CRUD 메서드들 ---
 
@@ -172,7 +163,15 @@ class DatabaseHelper {
   // Future<int> insertMedication(Map<String, dynamic> row) async { ... }
   // Future<int> insertAlarm(Map<String, dynamic> row) async { ... }
   // Future<int> updateAlarm(...) async { ... }
-  // Future<int> deleteAlarm(...) async { ... }
+  // 알람 삭제 메서드 (예시)
+  Future<int> deleteAlarm(int alarmId) async {
+    Database db = await database;
+    return await db.delete(
+      'MEDICATION_ALARMS',
+      where: 'alarm_id = ?',
+      whereArgs: [alarmId],
+    );
+  }
 
   Future<void> close() async {
     final db = await database;
