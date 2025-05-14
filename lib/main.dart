@@ -628,10 +628,51 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class MainPage extends StatelessWidget {
+
+class MainPage extends StatefulWidget {
   final String userEmail;
-  final List<String> days = ['월', '화', '수', '목', '금', '토', '일'];
+
   MainPage({Key? key, required this.userEmail}) : super(key: key);
+
+  @override
+  _MainPageState createState() => _MainPageState();
+}
+
+class _MainPageState extends State<MainPage> {
+  List<Map<String, dynamic>> _alarms = [];
+  bool _isLoading = true;
+
+  final List<String> days = ['월', '화', '수', '목', '금', '토', '일'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAlarms();
+  }
+
+  Future<void> _loadAlarms() async {
+    final alarms = await DatabaseHelper().getAllAlarmsForUser(widget.userEmail);
+    setState(() {
+      _alarms = alarms;
+      _isLoading = false;
+    });
+  }
+
+  List<Widget> _buildMealSection(String mealTime, String title) {
+    final filtered = _alarms.where((a) => a['MEAL_TIME'] == mealTime).toList();
+    if (filtered.isEmpty) return [];
+
+    return [
+      Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      SizedBox(height: 4),
+      ...filtered.map((alarm) => ListTile(
+        title: Text(alarm['MED_NAME']),
+        subtitle: Text('시간: ${alarm['ALARM_TIME']}'),
+        leading: Icon(Icons.medication_liquid, color: Colors.teal),
+      )),
+      SizedBox(height: 10),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -686,19 +727,13 @@ class MainPage extends StatelessWidget {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                Icons.camera_alt,
-                                size: 50,
-                                color: Colors.white,
-                              ),
+                              Icon(Icons.camera_alt, size: 50, color: Colors.white),
                               SizedBox(height: 8),
-                              Text(
-                                '처방전 촬영',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
+                              Text('처방전 촬영',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  )),
                             ],
                           ),
                         ),
@@ -725,16 +760,9 @@ class MainPage extends StatelessWidget {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                Icons.upload_file,
-                                size: 50,
-                                color: Colors.teal,
-                              ),
+                              Icon(Icons.upload_file, size: 50, color: Colors.teal),
                               SizedBox(height: 8),
-                              Text(
-                                '처방전 업로드',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
+                              Text('처방전 업로드', style: TextStyle(fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ),
@@ -745,19 +773,15 @@ class MainPage extends StatelessWidget {
                 SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children:
-                      days.map((day) {
-                        return Column(
-                          children: [
-                            Text(day, style: TextStyle(fontSize: 16)),
-                            SizedBox(height: 8),
-                            Icon(
-                              Icons.check_circle_outline,
-                              color: Colors.grey,
-                            ),
-                          ],
-                        );
-                      }).toList(),
+                  children: days.map((day) {
+                    return Column(
+                      children: [
+                        Text(day, style: TextStyle(fontSize: 16)),
+                        SizedBox(height: 8),
+                        Icon(Icons.check_circle_outline, color: Colors.grey),
+                      ],
+                    );
+                  }).toList(),
                 ),
               ],
             ),
@@ -767,16 +791,17 @@ class MainPage extends StatelessWidget {
               color: Color(0xFFF8F8F8),
               width: double.infinity,
               padding: EdgeInsets.all(20),
-              child: Column(
+              child: _isLoading
+                  ? Center(child: CircularProgressIndicator())
+                  : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '오늘의 복약 정보',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
+                  Text('오늘의 복약 정보',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   SizedBox(height: 10),
-                  ListTile(title: Text('오전: 종합비타민')),
-                  ListTile(title: Text('저녁: 위장약')),
+                  ..._buildMealSection('MORNING', '🌅 아침'),
+                  ..._buildMealSection('LUNCH', '🌞 점심'),
+                  ..._buildMealSection('DINNER', '🌙 저녁'),
                 ],
               ),
             ),
@@ -786,6 +811,7 @@ class MainPage extends StatelessWidget {
     );
   }
 }
+
 
 class CalendarPage extends StatefulWidget {
   final String userEmail;
