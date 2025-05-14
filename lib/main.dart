@@ -781,25 +781,34 @@ class _MainPageState extends State<MainPage> {
           ),
           Expanded(
             child: Container(
-              color: Color(0xFFF8F8F8),
-              width: double.infinity,
-              padding: EdgeInsets.all(20),
-              child: _isLoading
-                  ? Center(child: CircularProgressIndicator())
-                  : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('오늘의 복약 정보',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 15),
-                  ..._buildMealSection('MORNING', '🌅 아침'),
-                  ..._buildMealSection('LUNCH', '🌞 점심'),
-                  ..._buildMealSection('DINNER', '🌙 저녁'),
+            color: Color(0xFFF8F8F8),
+            width: double.infinity,
+            padding: EdgeInsets.all(20),
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator())
+                    : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            Text('오늘의 복약 정보',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            SizedBox(height: 10),
+            Expanded(
+            child: SingleChildScrollView(
+            child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            ..._buildMealSection('MORNING', '🌅 아침'),
+            ..._buildMealSection('LUNCH', '🌞 점심'),
+            ..._buildMealSection('DINNER', '🌙 저녁'),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    ),
+    ),
+      ],
       ),
     );
   }
@@ -908,24 +917,14 @@ class _CalendarPageState extends State<CalendarPage> {
         children: [
           Container(
             color: Color(0xFFFDFEFE),
-            padding: EdgeInsets.all(20),
+            padding: EdgeInsets.only(top: 35, bottom: 0, left: 20, right: 20),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   '복약 달력',
                   style: TextStyle(
-                    fontSize: 20,
-                    color: Colors.black,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Row(
-                  children: [
-                    Icon(Icons.emoji_emotions_outlined, color: Colors.black),
-                    SizedBox(width: 8),
-                    Icon(Icons.notifications_none, color: Colors.black),
-                  ],
+                    fontSize: 20, color: Colors.black, fontWeight: FontWeight.bold,),
                 ),
               ],
             ),
@@ -935,7 +934,7 @@ class _CalendarPageState extends State<CalendarPage> {
               color: Color(0xFFFDFEFE),
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
             ),
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 0),
             child: TableCalendar(
               firstDay: DateTime(2020),
               lastDay: DateTime(2030),
@@ -1037,6 +1036,7 @@ class _PillPageState extends State<PillPage> {
       appBar: AppBar(
         // AppBar 추가 (선택적)
         title: Text('복약 목록'),
+        automaticallyImplyLeading: false,
         backgroundColor: Color(0xFFFDFEFE),
         elevation: 0, // 그림자 제거
         titleTextStyle: TextStyle(
