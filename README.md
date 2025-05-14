@@ -1,6 +1,6 @@
-# testaaaa
+# 기초캡스톤 Flutter Code
 
-A new Flutter project.
+아침을 울리지 못한 닭도 지난 잘못을 메우고 다시 한 번 울고 싶은 법.
 
 ## Getting Started
 
