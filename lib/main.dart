@@ -281,7 +281,7 @@ class LoginScreen extends StatelessWidget {
           children: [
             Expanded(
               child: Center(
-                child: Image.asset('assets/logo.png', height: 150, width: 500),
+                child: Image.asset('assets/logo.png', height: 140, width: 500),
               ),
             ),
             Padding(
@@ -682,18 +682,11 @@ class _MainPageState extends State<MainPage> {
         children: [
           Container(
             color: Color(0xFFFDFEFE),
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+            padding: EdgeInsets.only(top: 40, bottom: 10, left: 20, right: 20),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Image.asset('assets/logo.png', height: 50),
-                Row(
-                  children: [
-                    Icon(Icons.emoji_emotions_outlined, color: Colors.black),
-                    SizedBox(width: 8),
-                    Icon(Icons.notifications_none, color: Colors.black),
-                  ],
-                ),
               ],
             ),
           ),
@@ -702,7 +695,7 @@ class _MainPageState extends State<MainPage> {
               color: Colors.white,
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
             ),
-            padding: EdgeInsets.all(20),
+            padding: EdgeInsets.all(5),
             child: Column(
               children: [
                 Row(
@@ -798,7 +791,7 @@ class _MainPageState extends State<MainPage> {
                 children: [
                   Text('오늘의 복약 정보',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 10),
+                  SizedBox(height: 15),
                   ..._buildMealSection('MORNING', '🌅 아침'),
                   ..._buildMealSection('LUNCH', '🌞 점심'),
                   ..._buildMealSection('DINNER', '🌙 저녁'),
@@ -809,6 +802,89 @@ class _MainPageState extends State<MainPage> {
         ],
       ),
     );
+  }
+}
+
+class AddAlarmPage extends StatefulWidget {
+  final String userEmail;
+  AddAlarmPage({required this.userEmail});
+
+  @override
+  _AddAlarmPageState createState() => _AddAlarmPageState();
+}
+
+class _AddAlarmPageState extends State<AddAlarmPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _medNameController = TextEditingController();
+  final _alarmTimeController = TextEditingController();
+  String _mealTime = 'MORNING';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('알람 추가')),
+      body: Padding(
+        padding: EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _medNameController,
+                decoration: InputDecoration(labelText: '약 이름'),
+                validator: (value) => value!.isEmpty ? '약 이름을 입력하세요' : null,
+              ),
+              DropdownButtonFormField<String>(
+                value: _mealTime,
+                decoration: InputDecoration(labelText: '복용 시간대'),
+                items: ['MORNING', 'LUNCH', 'DINNER']
+                    .map((time) => DropdownMenuItem(value: time, child: Text(time)))
+                    .toList(),
+                onChanged: (value) => setState(() => _mealTime = value!),
+              ),
+              TextFormField(
+                controller: _alarmTimeController,
+                decoration: InputDecoration(labelText: '알람 시간 (예: 08:00)'),
+                validator: (value) => value!.isEmpty ? '시간을 입력하세요' : null,
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () async {
+                  if (_formKey.currentState!.validate()) {
+                    final dbHelper = DatabaseHelper();
+                    final medName = _medNameController.text.trim();
+
+                    await _insertMedicationIfNeeded(dbHelper, medName);
+
+                    await dbHelper.database.then((db) {
+                      db.insert('MEDICATION_ALARMS', {
+                        'EMAIL': widget.userEmail,
+                        'MED_NAME': medName,
+                        'MEAL_TIME': _mealTime,
+                        'ALARM_TIME': _alarmTimeController.text.trim(),
+                        'START_DATE': DateTime.now().toIso8601String().split('T')[0],
+                        'END_DATE': null,
+                      });
+                    });
+
+                    Navigator.pop(context, true);
+                  }
+                },
+                child: Text('저장'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _insertMedicationIfNeeded(DatabaseHelper dbHelper, String medName) async {
+    final db = await dbHelper.database;
+    final existing = await db.query('medications', where: 'med_name = ?', whereArgs: [medName]);
+    if (existing.isEmpty) {
+      await db.insert('medications', {'med_name': medName, 'description': ''});
+    }
   }
 }
 
@@ -1036,18 +1112,20 @@ class _PillPageState extends State<PillPage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          // async 추가
-          // TODO: 약/알람 추가 페이지로 이동하는 로직 구현
-          // 예시: Navigator.push(context, MaterialPageRoute(builder: (_) => AddAlarmPage(userEmail: widget.userEmail)))
-          //      .then((_) => _loadAlarms()); // 추가 후 목록 새로고침
-          print('약 추가 버튼 클릭됨');
-          ScaffoldMessenger.of(
+          final result = await Navigator.push(
             context,
-          ).showSnackBar(SnackBar(content: Text('약 추가 기능은 아직 구현되지 않았습니다.')));
+            MaterialPageRoute(
+              builder: (_) => AddAlarmPage(userEmail: widget.userEmail),
+            ),
+          );
+          if (result == true) {
+            _loadAlarms(); // 알람 추가 후 목록 새로고침
+          }
         },
         child: Icon(Icons.add),
         backgroundColor: Colors.teal,
       ),
+
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
